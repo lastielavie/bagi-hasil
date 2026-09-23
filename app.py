@@ -1013,10 +1013,15 @@ def _tulis_sheet(wb, df, nama_sheet, judul, kolom_gaji=False):
     ws = wb.create_sheet(title=nama_sheet)
 
     ws.cell(row=1, column=1, value=judul).font = Font(bold=True, size=13, color='1F3864')
-    ws.cell(row=2, column=1,
-            value=f"Periode: {periode_txt} · Tarif: "
-                  + ", ".join(f"{k} {v:.0f}%" for k, v in tarif_input.items())
-                  + f", Lainnya {tarif_lain:.0f}%, pembanding flat {tarif_flat:.0f}%"
+    catatan_tarif = (f"Periode: {periode_txt} · Tarif: "
+                      + ", ".join(f"{k} {v:.0f}%" for k, v in tarif_input.items())
+                      + f", Lainnya {tarif_lain:.0f}%, pembanding flat {tarif_flat:.0f}%")
+    if pakai_mt_baru and abs(delta_mt) > 1e-12:
+        catatan_tarif += (f" · Mati Total {tarif_input['Mati Total']:.0f}% → "
+                          f"{tarif_mt_baru:.0f}% sejak {pd.Timestamp(tgl_mt_baru):%d %b %Y} "
+                          "(kolom Bagi Hasil Mati Total sudah proporsional per TGL FAKTUR, "
+                          "bukan rumus flat)")
+    ws.cell(row=2, column=1, value=catatan_tarif
             ).font = Font(size=9, italic=True, color='555555')
 
     n_baris, n_kol = len(df), len(df.columns)
@@ -1071,6 +1076,12 @@ def _tulis_sheet(wb, df, nama_sheet, judul, kolom_gaji=False):
             omzet_k = f"Omzet {k}"
             bh_k = f"Bagi Hasil {k}"
             if omzet_k in df.columns and bh_k in df.columns:
+                if k == 'Mati Total' and pakai_mt_baru and abs(delta_mt) > 1e-12:
+                    # Tarif Mati Total berjangka bercampur 2 angka dalam satu
+                    # periode (per TGL FAKTUR), jadi tidak bisa direpresentasikan
+                    # sebagai satu rumus perkalian. Biarkan nilai jadi (baris 1066)
+                    # yang sudah proporsional, jangan ditimpa rumus flat.
+                    continue
                 tar_frac = peta_tarif.get(k, 0.3)
                 if kunci_tek and kunci_tek in khusus and k in khusus[kunci_tek]:
                     tar_frac = khusus[kunci_tek][k]
