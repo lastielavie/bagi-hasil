@@ -912,21 +912,27 @@ def rekap_kualifikasi(df, keys):
     out['Selisih'] = out['BH'] - out['Flat']
     out['Efektif %'] = (out['BH'] / out['Omzet'].replace(0, pd.NA) * 100).round(1)
 
-    # Pecah Omzet Mati Total jadi sebelum/sesudah tanggal berlaku tarif baru,
-    # supaya rumus "Bagi Hasil Mati Total" di Excel tetap bisa memakai 2 tarif
-    # (bukan angka jadi) meski satu periode gaji terbelah tanggal itu.
-    kol_mt_split = []
-    if pakai_mt_baru and abs(delta_mt) > 1e-12 and 'TGL' in df.columns:
+    # Kalau tarif Mati Total berjangka aktif, kolom "Omzet Mati Total" gabungan
+    # DIGANTI oleh 2 kolom (Lama/Baru) tepat di posisi yang sama — bukan
+    # ditambahkan di ujung — supaya rumus SUM(Interface:Lainnya) di bawah
+    # otomatis ikut menjumlahkannya, tanpa perlu kolom "Mati Total" gabungan.
+    omzet_urutan = list(KATEGORI_ORDER)
+    split_aktif = pakai_mt_baru and abs(delta_mt) > 1e-12 and 'TGL' in df.columns
+    if split_aktif:
         m_mt_lbl = df['TARIF_LABEL'] == 'Mati Total'
         omzet_lama = df['TOTAL HARGA'].where(m_mt_lbl & (df['TGL'] < batas_mt), 0.0)
         omzet_baru = df['TOTAL HARGA'].where(m_mt_lbl & (df['TGL'] >= batas_mt), 0.0)
         split = (df.assign(**{KOL_MT_LAMA: omzet_lama, KOL_MT_BARU: omzet_baru})
                    .groupby(keys, as_index=False)[[KOL_MT_LAMA, KOL_MT_BARU]].sum())
-        out = out.merge(split, on=keys, how='left')
-        kol_mt_split = [KOL_MT_LAMA, KOL_MT_BARU]
+        out = out.merge(split, on=keys, how='left').drop(columns=['Omzet Mati Total'])
+        idx = omzet_urutan.index('Mati Total')
+        kolom_omzet = ([f"Omzet {k}" for k in omzet_urutan[:idx]]
+                       + [KOL_MT_LAMA, KOL_MT_BARU]
+                       + [f"Omzet {k}" for k in omzet_urutan[idx + 1:]])
+    else:
+        kolom_omzet = [f"Omzet {k}" for k in omzet_urutan]
 
-    urut = list(keys) + ['Baris'] \
-        + [f"Omzet {k}" for k in KATEGORI_ORDER] + kol_mt_split + ['Omzet'] \
+    urut = list(keys) + ['Baris'] + kolom_omzet + ['Omzet'] \
         + [f"Bagi Hasil {k}" for k in KATEGORI_ORDER] + ['BH', 'Flat', 'Selisih', 'Efektif %']
     out = out[urut].rename(columns={
         'TEKNISI': 'Nama Teknisi', 'CABANG': 'Cabang',
@@ -1090,28 +1096,32 @@ def _tulis_sheet(wb, df, nama_sheet, judul, kolom_gaji=False):
         tek_nama = df.iloc[i].get('Nama Teknisi', '')
         kunci_tek = peta_nama.get(tek_nama)
         for k in KATEGORI_ORDER:
-            omzet_k = f"Omzet {k}"
             bh_k = f"Bagi Hasil {k}"
-            if omzet_k in df.columns and bh_k in df.columns:
-                if (k == 'Mati Total' and pakai_mt_baru and abs(delta_mt) > 1e-12
-                        and KOL_MT_LAMA in df.columns and KOL_MT_BARU in df.columns):
-                    # Tarif Mati Total berjangka: dipecah Omzet-nya jadi 2 kolom
-                    # (sebelum/sesudah tanggal berlaku), lalu rumusnya jumlah dari
-                    # kedua tarif — tetap murni rumus, bukan angka jadi.
-                    tarif_lama = tarif_input['Mati Total'] / 100.0
-                    tarif_baru = tarif_mt_baru / 100.0
-                    if kunci_tek and kunci_tek in khusus and 'Mati Total' in khusus[kunci_tek]:
-                        tarif_lama = khusus[kunci_tek]['Mati Total']
-                        tarif_baru = tarif_lama + delta_mt
-                    ws.cell(row=r, column=df.columns.get_loc(bh_k) + 1,
-                            value=f"={kol_letter(KOL_MT_LAMA)}{r}*{tarif_lama}"
-                                  f"+{kol_letter(KOL_MT_BARU)}{r}*{tarif_baru}")
-                    continue
-                tar_frac = peta_tarif.get(k, 0.3)
-                if kunci_tek and kunci_tek in khusus and k in khusus[kunci_tek]:
-                    tar_frac = khusus[kunci_tek][k]
+            if bh_k not in df.columns:
+                continue
+            if (k == 'Mati Total' and pakai_mt_baru and abs(delta_mt) > 1e-12
+                    and KOL_MT_LAMA in df.columns and KOL_MT_BARU in df.columns):
+                # Tarif Mati Total berjangka: Omzet-nya sudah jadi 2 kolom
+                # (sebelum/sesudah tanggal berlaku), rumusnya jumlah dari
+                # kedua tarif — tetap murni rumus, bukan angka jadi. Kolom
+                # "Omzet Mati Total" gabungan sudah tidak ada lagi.
+                tarif_lama = tarif_input['Mati Total'] / 100.0
+                tarif_baru = tarif_mt_baru / 100.0
+                if kunci_tek and kunci_tek in khusus and 'Mati Total' in khusus[kunci_tek]:
+                    tarif_lama = khusus[kunci_tek]['Mati Total']
+                    tarif_baru = tarif_lama + delta_mt
                 ws.cell(row=r, column=df.columns.get_loc(bh_k) + 1,
-                        value=f"={kol_letter(omzet_k)}{r}*{tar_frac}")
+                        value=f"={kol_letter(KOL_MT_LAMA)}{r}*{tarif_lama}"
+                              f"+{kol_letter(KOL_MT_BARU)}{r}*{tarif_baru}")
+                continue
+            omzet_k = f"Omzet {k}"
+            if omzet_k not in df.columns:
+                continue
+            tar_frac = peta_tarif.get(k, 0.3)
+            if kunci_tek and kunci_tek in khusus and k in khusus[kunci_tek]:
+                tar_frac = khusus[kunci_tek][k]
+            ws.cell(row=r, column=df.columns.get_loc(bh_k) + 1,
+                    value=f"={kol_letter(omzet_k)}{r}*{tar_frac}")
 
         if 'Omzet Jasa (Total)' in df.columns and 'Omzet Interface' in df.columns:
             ws.cell(row=r, column=df.columns.get_loc('Omzet Jasa (Total)') + 1,
