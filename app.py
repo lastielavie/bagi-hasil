@@ -1101,9 +1101,6 @@ def _tulis_sheet(wb, df, nama_sheet, judul, kolom_gaji=False):
                 continue
             if (k == 'Mati Total' and pakai_mt_baru and abs(delta_mt) > 1e-12
                     and KOL_MT_LAMA in df.columns and KOL_MT_BARU in df.columns):
-                # Tarif Mati Total berjangka: Omzet-nya sudah jadi 2 kolom
-                # (sebelum/sesudah tanggal berlaku), rumusnya jumlah dari
-                # kedua tarif — dibungkus tanda kurung pada masing-masing suku.
                 tarif_lama = tarif_input['Mati Total'] / 100.0
                 tarif_baru = tarif_mt_baru / 100.0
                 if kunci_tek and kunci_tek in khusus and 'Mati Total' in khusus[kunci_tek]:
@@ -1303,7 +1300,7 @@ def buat_excel(df_sumber, raw_bytes=None, nama_cabang_file='Semua Cabang'):
                 # Cek apakah Mati Total split 2 kolom aktif di sheet RAW
                 split_aktif = pakai_mt_baru and abs(delta_mt) > 1e-12 and 'TGL' in df_sumber.columns
 
-                def transform_raw_formula(formula_str, r_raw):
+                def transform_raw_formula(formula_str, r_raw, r_curr):
                     if not formula_str or not isinstance(formula_str, str):
                         return formula_str
 
@@ -1329,7 +1326,17 @@ def buat_excel(df_sumber, raw_bytes=None, nama_cabang_file='Semua Cabang'):
                         return f"RAW!{shift_col(c)}{r_raw}"
 
                     s = re.sub(r'RAW!([A-Z]+)\d+', replace_single, s)
+
+                    # 3. Geser referensi lokal di sheet FINAL (misal AD8 -> AD9)
+                    s = re.sub(rf'([A-Z]+){baris_awal_data}\b', rf'\g<1>{r_curr}', s)
+
                     return norm_formula(s)
+
+                # Simpan nilai/rumus template asli dari baris 8 SEBELUM diubah
+                template_row_values = [
+                    ws_f.cell(baris_awal_data, col_idx).value
+                    for col_idx in range(1, ws_f.max_column + 1)
+                ]
 
                 # Update & salin nilai serta rumus untuk semua baris data
                 for idx_s in range(n_data_raw):
@@ -1337,7 +1344,8 @@ def buat_excel(df_sumber, raw_bytes=None, nama_cabang_file='Semua Cabang'):
                     r_raw = 5 + idx_s
 
                     for col_idx in range(1, ws_f.max_column + 1):
-                        ref_cell = ws_f.cell(baris_awal_data, col_idx)
+                        ref_val = template_row_values[col_idx - 1]
+                        ref_cell = ws_f.cell(baris_awal_data, col_idx)  # Untuk ambil style
                         new_cell = ws_f.cell(r_curr, col_idx)
 
                         if ref_cell.has_style:
@@ -1349,13 +1357,13 @@ def buat_excel(df_sumber, raw_bytes=None, nama_cabang_file='Semua Cabang'):
 
                         if col_idx == col_no:
                             new_cell.value = idx_s + 1
-                        elif ref_cell.value and isinstance(ref_cell.value, str) and 'RAW!' in ref_cell.value:
-                            new_cell.value = transform_raw_formula(ref_cell.value, r_raw)
-                        elif ref_cell.value and isinstance(ref_cell.value, str) and ref_cell.value.startswith('='):
-                            val = re.sub(rf'([A-Z]+){baris_awal_data}\b', rf'\g<1>{r_curr}', ref_cell.value)
+                        elif ref_val and isinstance(ref_val, str) and 'RAW!' in ref_val:
+                            new_cell.value = transform_raw_formula(ref_val, r_raw, r_curr)
+                        elif ref_val and isinstance(ref_val, str) and ref_val.startswith('='):
+                            val = re.sub(rf'([A-Z]+){baris_awal_data}\b', rf'\g<1>{r_curr}', ref_val)
                             new_cell.value = norm_formula(val)
-                        elif ref_cell.value is not None:
-                            new_cell.value = ref_cell.value
+                        elif ref_val is not None:
+                            new_cell.value = ref_val
 
                 # Re-number kolom NO untuk seluruh baris data
                 for idx_n in range(n_data_raw):
