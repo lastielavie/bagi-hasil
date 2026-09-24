@@ -948,7 +948,7 @@ def _rumus_gaji(df, r):
         'Total Potongan':
             f"=SUM({kol(KOLOM_POTONGAN[0])}{r}:{kol(KOLOM_POTONGAN[-1])}{r})",
         'Nett Bagi hasil':
-            f"={kol('Bagi Hasil (Aturan)')}{r}-{kol('Total Potongan')}{r}",
+            f"={kol('Gaji Teknisi')}{r}+({kol('Bagi Hasil (Aturan)')}{r}-{kol('Total Potongan')}{r})",
         'Total Cadangan 7 Tahun':
             f"={kol('Cadangan 7 Tahun / bulan')}{r}+{kol('Cadangan 7 Tahun')}{r}",
     }
@@ -1103,16 +1103,14 @@ def _tulis_sheet(wb, df, nama_sheet, judul, kolom_gaji=False):
                     and KOL_MT_LAMA in df.columns and KOL_MT_BARU in df.columns):
                 # Tarif Mati Total berjangka: Omzet-nya sudah jadi 2 kolom
                 # (sebelum/sesudah tanggal berlaku), rumusnya jumlah dari
-                # kedua tarif — tetap murni rumus, bukan angka jadi. Kolom
-                # "Omzet Mati Total" gabungan sudah tidak ada lagi.
+                # kedua tarif — dibungkus tanda kurung pada masing-masing suku.
                 tarif_lama = tarif_input['Mati Total'] / 100.0
                 tarif_baru = tarif_mt_baru / 100.0
                 if kunci_tek and kunci_tek in khusus and 'Mati Total' in khusus[kunci_tek]:
                     tarif_lama = khusus[kunci_tek]['Mati Total']
                     tarif_baru = tarif_lama + delta_mt
                 ws.cell(row=r, column=df.columns.get_loc(bh_k) + 1,
-                        value=f"={kol_letter(KOL_MT_LAMA)}{r}*{tarif_lama}"
-                              f"+{kol_letter(KOL_MT_BARU)}{r}*{tarif_baru}")
+                        value=f"=({kol_letter(KOL_MT_LAMA)}{r}*{tarif_lama})+({kol_letter(KOL_MT_BARU)}{r}*{tarif_baru})")
                 continue
             omzet_k = f"Omzet {k}"
             if omzet_k not in df.columns:
@@ -1302,6 +1300,37 @@ def buat_excel(df_sumber, raw_bytes=None, nama_cabang_file='Semua Cabang'):
                     jumlah_disisip = n_data_raw - n_template_rows
                     ws_f.insert_rows(baris_total, amount=jumlah_disisip)
 
+                # Cek apakah Mati Total split 2 kolom aktif di sheet RAW
+                split_aktif = pakai_mt_baru and abs(delta_mt) > 1e-12 and 'TGL' in df_sumber.columns
+
+                def transform_raw_formula(formula_str, r_raw):
+                    if not formula_str or not isinstance(formula_str, str):
+                        return formula_str
+
+                    def shift_col(col_str):
+                        if not split_aktif:
+                            return col_str
+                        col_idx = column_index_from_string(col_str)
+                        # Bila split aktif, kolom dari index 7 (kolom G) ke atas bergeser 1 kolom ke kanan (+1)
+                        if col_idx >= 7:
+                            return get_column_letter(col_idx + 1)
+                        return col_str
+
+                    # 1. Geser range seperti RAW!S8:AA8 menjadi RAW!T5:AB5
+                    def replace_range(m):
+                        c1, c2 = m.group(1), m.group(2)
+                        return f"RAW!{shift_col(c1)}{r_raw}:{shift_col(c2)}{r_raw}"
+
+                    s = re.sub(r'RAW!([A-Z]+)\d+:([A-Z]+)\d+', replace_range, formula_str)
+
+                    # 2. Geser sel tunggal seperti RAW!O8 atau RAW!AD8
+                    def replace_single(m):
+                        c = m.group(1)
+                        return f"RAW!{shift_col(c)}{r_raw}"
+
+                    s = re.sub(r'RAW!([A-Z]+)\d+', replace_single, s)
+                    return norm_formula(s)
+
                 # Update & salin nilai serta rumus untuk semua baris data
                 for idx_s in range(n_data_raw):
                     r_curr = baris_awal_data + idx_s
@@ -1321,8 +1350,7 @@ def buat_excel(df_sumber, raw_bytes=None, nama_cabang_file='Semua Cabang'):
                         if col_idx == col_no:
                             new_cell.value = idx_s + 1
                         elif ref_cell.value and isinstance(ref_cell.value, str) and 'RAW!' in ref_cell.value:
-                            val = re.sub(r'(RAW![A-Z]+)\d+', rf'\g<1>{r_raw}', ref_cell.value)
-                            new_cell.value = norm_formula(val)
+                            new_cell.value = transform_raw_formula(ref_cell.value, r_raw)
                         elif ref_cell.value and isinstance(ref_cell.value, str) and ref_cell.value.startswith('='):
                             val = re.sub(rf'([A-Z]+){baris_awal_data}\b', rf'\g<1>{r_curr}', ref_cell.value)
                             new_cell.value = norm_formula(val)
