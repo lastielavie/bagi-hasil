@@ -1093,25 +1093,6 @@ def _tulis_sheet(wb, df, nama_sheet, judul, kolom_gaji=False):
             val = df.iloc[i][kol]
             ws.cell(row=r, column=j, value=val if pd.notna(val) else None)
 
-        # ----------------------------------------------------------------------
-        # AMBIL OMZET PER KATA KUNCI DARI SHEET "Pivot" MENGGUNAKAN GETPIVOTDATA
-        # ----------------------------------------------------------------------
-        if 'Nama Teknisi' in df.columns:
-            tek_col = kol_letter('Nama Teknisi')
-            for k in KATEGORI_ORDER:
-                omzet_k = f"Omzet {k}"
-                if omzet_k in df.columns:
-                    col_idx = df.columns.get_loc(omzet_k) + 1
-                    lbl_pivot = "Omset lainnya" if k == LABEL_LAINNYA else f"Omset {k}"
-                    
-                    # Rumus GETPIVOTDATA mengambil data dari PivotTable di sheet Pivot sel $A$3
-                    rumus_pivot = (
-                        f'=IFERROR(GETPIVOTDATA("TOTAL HARGA", Pivot!$A$3, '
-                        f'"NAMA TEKNISI", {tek_col}{r}, "Kategori", "{lbl_pivot}"), 0)'
-                    )
-                    ws.cell(row=r, column=col_idx, value=norm_formula(rumus_pivot))
-        # ----------------------------------------------------------------------
-
         tek_nama = df.iloc[i].get('Nama Teknisi', '')
         kunci_tek = peta_nama.get(tek_nama)
         for k in KATEGORI_ORDER:
