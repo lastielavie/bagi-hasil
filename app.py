@@ -1417,7 +1417,25 @@ else:
     else:
         label_tgl_file = date.today().strftime('%d-%m-%Y')
 
-nama_file_download = f"Bagi hasil teknisi {label_tgl_file} {nama_cabang_file}.xlsx"
+# Nomor urut cabang untuk awalan nama file
+NOMOR_CABANG = {
+    'KLENDER': 19, 'CEGER': 20, 'BINTARA': 21, 'RADJIMAN': 22,
+    'JATIMULYA': 23, 'DRAMAGA': 24, 'CONDET': 25, 'JATIBENING': 26,
+    'DEPOK SAWANGAN': 27, 'WARBONG': 28, 'CINERE': 29, 'CIBINONG': 30,
+    'KARAWANG': 31, 'JATIWARINGIN': 32, 'CIKAMPEK': 33, 'CILANGKAP': 34,
+    'PEJATEN': 35, 'CIBUBUR': 36,
+}
+
+if isinstance(pilih, tuple):                 # pilih = (tahun, bulan)
+    ym_file = f"{pilih[0]}{pilih[1]:02d}"
+elif not jasa_tampil.empty and pd.notna(jasa_tampil['TGL'].max()):
+    ym_file = jasa_tampil['TGL'].max().strftime('%Y%m')
+else:
+    ym_file = date.today().strftime('%Y%m')
+
+no_cab = NOMOR_CABANG.get(str(nama_cabang_file).upper())
+awalan = f"{no_cab} " if no_cab else ""
+nama_file_download = f"{awalan}{ym_file} TEKNISI HP {str(nama_cabang_file).upper()}.xlsx"
 
 with st.container():
     st.markdown("##### 📊 Unduh Excel (Sesuai Template + Sheet RAW + Sheet FINAL)")
