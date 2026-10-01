@@ -1421,7 +1421,7 @@ else:
 NOMOR_CABANG = {
     'KLENDER': 19, 'CEGER': 20, 'BINTARA': 21, 'RADJIMAN': 22,
     'JATIMULYA': 23, 'DRAMAGA': 24, 'CONDET': 25, 'JATIBENING': 26,
-    'DEPOK SAWANGAN': 27, 'WARBONG': 28, 'CINERE': 29, 'CIBINONG': 30,
+    'SAWANGAN': 27, 'WARBONG': 28, 'CINERE': 29, 'CIBINONG': 30,
     'KARAWANG': 31, 'JATIWARINGIN': 32, 'CIKAMPEK': 33, 'CILANGKAP': 34,
     'PEJATEN': 35, 'CIBUBUR': 36,
 }
@@ -1433,9 +1433,13 @@ elif not jasa_tampil.empty and pd.notna(jasa_tampil['TGL'].max()):
 else:
     ym_file = date.today().strftime('%Y%m')
 
-no_cab = NOMOR_CABANG.get(str(nama_cabang_file).upper())
+# Nama cabang di nama file bila berbeda dari nama kanonik
+NAMA_FILE_CABANG = {'SAWANGAN': 'DEPOK SAWANGAN'}
+
+cab_up = str(nama_cabang_file).upper()
+no_cab = NOMOR_CABANG.get(cab_up)
 awalan = f"{no_cab} " if no_cab else ""
-nama_file_download = f"{awalan}{ym_file} TEKNISI HP {str(nama_cabang_file).upper()}.xlsx"
+nama_file_download = f"{awalan}{ym_file} TEKNISI HP {NAMA_FILE_CABANG.get(cab_up, cab_up)}.xlsx"
 
 with st.container():
     st.markdown("##### 📊 Unduh Excel (Sesuai Template + Sheet RAW + Sheet FINAL)")
