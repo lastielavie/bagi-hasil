@@ -47,7 +47,7 @@ Tarif ditentukan dari kata kunci pada kolom **NAMA BARANG**:
 |---|---|
 | mengandung **Interface** | 20% |
 | mengandung **Normal** | 30% |
-| mengandung **Mati Total** | 32% |
+| mengandung **Mati Total** | 35% |
 | mengandung **Promo** | 60% |
 | tidak mengandung kata kunci mana pun | 30% |
 

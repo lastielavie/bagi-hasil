@@ -37,15 +37,10 @@ PALETTE = ['#1f3864', '#2e9bd6', '#16a34a', '#e0921f', '#c9392f',
 
 KATA_KUNCI_TARIF = ['INTERFACE', 'NORMAL', 'MATI TOTAL', 'PROMO']
 KATEGORI_TARIF = ['Interface', 'Normal', 'Mati Total', 'Promo', 'Lainnya']
-TARIF_AWAL = {'Interface': 20.0, 'Normal': 30.0, 'Mati Total': 32.0, 'Promo': 60.0}
+TARIF_AWAL = {'Interface': 20.0, 'Normal': 30.0, 'Mati Total': 35.0, 'Promo': 60.0}
 TARIF_DEFAULT_AWAL = 30.0
 TARIF_PEMBANDING_AWAL = 30.0
 LABEL_LAINNYA = 'Lainnya'
-
-# Perubahan tarif Mati Total yang berlaku mulai tanggal tertentu. Diterapkan
-# per TGL FAKTUR sehingga periode gaji yang terbelah terhitung proporsional.
-TGL_MT_BARU_AWAL = date(2026, 9, 1)
-TARIF_MT_BARU_AWAL = 35.0
 
 POLA_JASA_DIKECUALIKAN = ['OPER GADGET']
 
@@ -103,10 +98,10 @@ KOL_TARIF_KHUSUS = ['Nama Teknisi', 'Interface', 'Normal', 'Mati Total', 'Promo'
 
 def tarif_khusus_awal():
     baris = [{'Nama Teknisi': n, 'Interface': 20.0, 'Normal': 20.0,
-              'Mati Total': 22.0, 'Promo': None, 'Lainnya': 20.0}
+              'Mati Total': 25.0, 'Promo': None, 'Lainnya': 20.0}
              for n in NAMA_TARIF_TETAP_20]
     baris += [{'Nama Teknisi': n, 'Interface': None, 'Normal': 35.5,
-               'Mati Total': 37.5, 'Promo': None, 'Lainnya': None}
+               'Mati Total': 40.5, 'Promo': None, 'Lainnya': None}
               for n in NAMA_TARIF_NORMAL_355]
     return pd.DataFrame(baris, columns=KOL_TARIF_KHUSUS)
 
@@ -584,25 +579,6 @@ with st.expander("⚙️ Pengaturan Tarif Bagi Hasil — klik untuk mengubah", e
                      if c in set(jasa_all['CABANG'].dropna())],
             key='cab_kerusakan')
 
-    st.divider()
-    st.markdown("**Perubahan tarif Mati Total berjangka**")
-    st.caption(
-        "Mulai tanggal yang dipilih, tarif Mati Total memakai angka baru. "
-        "Penerapannya per **TGL FAKTUR**, jadi satu periode gaji yang terbelah "
-        "tanggal berlakunya terhitung proporsional dengan sendirinya. Selisih "
-        "poinnya juga ditambahkan ke teknisi bertarif khusus.")
-    m1, m2, m3 = st.columns([1, 1.1, 1.6])
-    with m1:
-        pakai_mt_baru = st.checkbox("Aktifkan", value=True, key='mt_aktif')
-    with m2:
-        tgl_mt_baru = st.date_input(
-            "Berlaku sejak", value=TGL_MT_BARU_AWAL, key='mt_tgl',
-            format="DD/MM/YYYY")
-    with m3:
-        tarif_mt_baru = st.number_input(
-            "Mati Total sejak tanggal itu (%)", 0.0, 100.0, TARIF_MT_BARU_AWAL,
-            0.5, key='mt_tarif')
-
     if st.button("↩️ Kembalikan ke tarif awal", key='t_reset'):
         for k, v in [('t_int', 'Interface'), ('t_nor', 'Normal'),
                      ('t_mat', 'Mati Total'), ('t_pro', 'Promo')]:
@@ -610,9 +586,6 @@ with st.expander("⚙️ Pengaturan Tarif Bagi Hasil — klik untuk mengubah", e
         st.session_state['t_lain'] = TARIF_DEFAULT_AWAL
         st.session_state['t_flat'] = TARIF_PEMBANDING_AWAL
         st.session_state['t_prio'] = 'Normal'
-        st.session_state['mt_aktif'] = True
-        st.session_state['mt_tgl'] = TGL_MT_BARU_AWAL
-        st.session_state['mt_tarif'] = TARIF_MT_BARU_AWAL
         st.session_state['tabel_khusus'] = tarif_khusus_awal()
         st.session_state.pop('ed_khusus', None)
         st.rerun()
@@ -718,20 +691,6 @@ for kunci, tar in khusus.items():
         n_khusus += int(m.sum())
 tanpa_padanan = sorted(set(khusus) - set(peta_nama.values()))
 
-# --- perubahan tarif Mati Total sejak tanggal tertentu -----------------------
-# Ditambahkan sebagai SELISIH POIN supaya teknisi bertarif khusus ikut naik
-# dengan besaran yang sama (mis. 22% -> 25%, 37,5% -> 40,5% saat 32% -> 35%).
-delta_mt = 0.0
-n_mt_baru = 0
-if pakai_mt_baru:
-    delta_mt = (tarif_mt_baru - tarif_input['Mati Total']) / 100.0
-    batas_mt = pd.Timestamp(tgl_mt_baru)
-    m_mt = ((jasa_all['TARIF_LABEL'] == 'Mati Total')
-            & (jasa_all['TGL'] >= batas_mt))
-    n_mt_baru = int(m_mt.sum())
-    if n_mt_baru and abs(delta_mt) > 1e-12:
-        jasa_all.loc[m_mt, 'TARIF'] = jasa_all.loc[m_mt, 'TARIF'] + delta_mt
-
 jasa_all['BAGI_HASIL'] = jasa_all['TOTAL HARGA'] * jasa_all['TARIF']
 jasa_all['FLAT'] = jasa_all['TOTAL HARGA'] * (tarif_flat / 100.0)
 
@@ -741,13 +700,6 @@ st.caption(
     f" · Lainnya {tarif_lain:.0f}% · pembanding flat {tarif_flat:.0f}%"
     f" · prioritas bentrok: {prioritas}"
 )
-if pakai_mt_baru and abs(delta_mt) > 1e-12:
-    st.caption(
-        f"**Tarif Mati Total sejak {pd.Timestamp(tgl_mt_baru):%d %B %Y}:** "
-        f"{tarif_input['Mati Total']:.1f}% → **{tarif_mt_baru:.1f}%** "
-        f"({delta_mt*100:+.1f} poin, ikut menaikkan tarif khusus) · "
-        f"mempengaruhi {n_mt_baru:,} baris Mati Total. Faktur sebelum tanggal itu "
-        "tetap memakai tarif lama.")
 if n_kecuali:
     st.caption(f"**Dikecualikan:** {n_kecuali:,} baris jasa "
                f"({', '.join(pola_kecuali)}) senilai {rp(omzet_kecuali)} "
@@ -886,10 +838,6 @@ def _sheet_name(nama, terpakai):
     return s
 
 
-KOL_MT_LAMA = 'Omzet Mati Total (Lama)'
-KOL_MT_BARU = 'Omzet Mati Total (Baru)'
-
-
 def rekap_kualifikasi(df, keys):
     base = (df.groupby(keys, as_index=False)
               .agg(Baris=('TOTAL HARGA', 'size'),
@@ -912,25 +860,7 @@ def rekap_kualifikasi(df, keys):
     out['Selisih'] = out['BH'] - out['Flat']
     out['Efektif %'] = (out['BH'] / out['Omzet'].replace(0, pd.NA) * 100).round(1)
 
-    # Kalau tarif Mati Total berjangka aktif, kolom "Omzet Mati Total" gabungan
-    # DIGANTI oleh 2 kolom (Lama/Baru) tepat di posisi yang sama — bukan
-    # ditambahkan di ujung — supaya rumus SUM(Interface:Lainnya) di bawah
-    # otomatis ikut menjumlahkannya, tanpa perlu kolom "Mati Total" gabungan.
-    omzet_urutan = list(KATEGORI_ORDER)
-    split_aktif = pakai_mt_baru and abs(delta_mt) > 1e-12 and 'TGL' in df.columns
-    if split_aktif:
-        m_mt_lbl = df['TARIF_LABEL'] == 'Mati Total'
-        omzet_lama = df['TOTAL HARGA'].where(m_mt_lbl & (df['TGL'] < batas_mt), 0.0)
-        omzet_baru = df['TOTAL HARGA'].where(m_mt_lbl & (df['TGL'] >= batas_mt), 0.0)
-        split = (df.assign(**{KOL_MT_LAMA: omzet_lama, KOL_MT_BARU: omzet_baru})
-                   .groupby(keys, as_index=False)[[KOL_MT_LAMA, KOL_MT_BARU]].sum())
-        out = out.merge(split, on=keys, how='left').drop(columns=['Omzet Mati Total'])
-        idx = omzet_urutan.index('Mati Total')
-        kolom_omzet = ([f"Omzet {k}" for k in omzet_urutan[:idx]]
-                       + [KOL_MT_LAMA, KOL_MT_BARU]
-                       + [f"Omzet {k}" for k in omzet_urutan[idx + 1:]])
-    else:
-        kolom_omzet = [f"Omzet {k}" for k in omzet_urutan]
+    kolom_omzet = [f"Omzet {k}" for k in KATEGORI_ORDER]
 
     urut = list(keys) + ['Baris'] + kolom_omzet + ['Omzet'] \
         + [f"Bagi Hasil {k}" for k in KATEGORI_ORDER] + ['BH', 'Flat', 'Selisih', 'Efektif %']
@@ -1039,11 +969,6 @@ def _tulis_sheet(wb, df, nama_sheet, judul, kolom_gaji=False):
     catatan_tarif = (f"Periode: {periode_txt} · Tarif: "
                       + ", ".join(f"{k} {v:.0f}%" for k, v in tarif_input.items())
                       + f", Lainnya {tarif_lain:.0f}%, pembanding flat {tarif_flat:.0f}%")
-    if pakai_mt_baru and abs(delta_mt) > 1e-12:
-        catatan_tarif += (f" · Mati Total {tarif_input['Mati Total']:.0f}% → "
-                          f"{tarif_mt_baru:.0f}% sejak {pd.Timestamp(tgl_mt_baru):%d %b %Y} "
-                          "(kolom Bagi Hasil Mati Total sudah proporsional per TGL FAKTUR, "
-                          "bukan rumus flat)")
     ws.cell(row=2, column=1, value=catatan_tarif
             ).font = Font(size=9, italic=True, color='555555')
 
@@ -1098,16 +1023,6 @@ def _tulis_sheet(wb, df, nama_sheet, judul, kolom_gaji=False):
         for k in KATEGORI_ORDER:
             bh_k = f"Bagi Hasil {k}"
             if bh_k not in df.columns:
-                continue
-            if (k == 'Mati Total' and pakai_mt_baru and abs(delta_mt) > 1e-12
-                    and KOL_MT_LAMA in df.columns and KOL_MT_BARU in df.columns):
-                tarif_lama = tarif_input['Mati Total'] / 100.0
-                tarif_baru = tarif_mt_baru / 100.0
-                if kunci_tek and kunci_tek in khusus and 'Mati Total' in khusus[kunci_tek]:
-                    tarif_lama = khusus[kunci_tek]['Mati Total']
-                    tarif_baru = tarif_lama + delta_mt
-                ws.cell(row=r, column=df.columns.get_loc(bh_k) + 1,
-                        value=f"=({kol_letter(KOL_MT_LAMA)}{r}*{tarif_lama})+({kol_letter(KOL_MT_BARU)}{r}*{tarif_baru})")
                 continue
             omzet_k = f"Omzet {k}"
             if omzet_k not in df.columns:
@@ -1297,35 +1212,15 @@ def buat_excel(df_sumber, raw_bytes=None, nama_cabang_file='Semua Cabang'):
                     jumlah_disisip = n_data_raw - n_template_rows
                     ws_f.insert_rows(baris_total, amount=jumlah_disisip)
 
-                # Cek apakah Mati Total split 2 kolom aktif di sheet RAW
-                split_aktif = pakai_mt_baru and abs(delta_mt) > 1e-12 and 'TGL' in df_sumber.columns
-
                 def transform_raw_formula(formula_str, r_raw, r_curr):
                     if not formula_str or not isinstance(formula_str, str):
                         return formula_str
 
-                    def shift_col(col_str):
-                        if not split_aktif:
-                            return col_str
-                        col_idx = column_index_from_string(col_str)
-                        # Bila split aktif, kolom dari index 7 (kolom G) ke atas bergeser 1 kolom ke kanan (+1)
-                        if col_idx >= 7:
-                            return get_column_letter(col_idx + 1)
-                        return col_str
-
-                    # 1. Geser range seperti RAW!S8:AA8 menjadi RAW!T5:AB5
-                    def replace_range(m):
-                        c1, c2 = m.group(1), m.group(2)
-                        return f"RAW!{shift_col(c1)}{r_raw}:{shift_col(c2)}{r_raw}"
-
-                    s = re.sub(r'RAW!([A-Z]+)\d+:([A-Z]+)\d+', replace_range, formula_str)
+                    # 1. Geser range seperti RAW!S8:AA8 menjadi RAW!S5:AA5
+                    s = re.sub(r'RAW!([A-Z]+)\d+:([A-Z]+)\d+', rf'RAW!\1{r_raw}:\2{r_raw}', formula_str)
 
                     # 2. Geser sel tunggal seperti RAW!O8 atau RAW!AD8
-                    def replace_single(m):
-                        c = m.group(1)
-                        return f"RAW!{shift_col(c)}{r_raw}"
-
-                    s = re.sub(r'RAW!([A-Z]+)\d+', replace_single, s)
+                    s = re.sub(r'RAW!([A-Z]+)\d+', rf'RAW!\1{r_raw}', s)
 
                     # 3. Geser referensi lokal di sheet FINAL (misal AD8 -> AD9)
                     s = re.sub(rf'([A-Z]+){baris_awal_data}\b', rf'\g<1>{r_curr}', s)
