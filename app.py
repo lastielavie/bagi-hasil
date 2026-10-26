@@ -1217,13 +1217,16 @@ def buat_excel(df_sumber, raw_bytes=None, nama_cabang_file='Semua Cabang'):
                         return formula_str
 
                     # 1. Geser range seperti RAW!S8:AA8 menjadi RAW!S5:AA5
-                    s = re.sub(r'RAW!([A-Z]+)\d+:([A-Z]+)\d+', rf'RAW!\1{r_raw}:\2{r_raw}', formula_str)
+                    s = re.sub(r'RAW!([A-Z]+)\d+:([A-Z]+)\d+',
+                               lambda m: f"RAW!{m.group(1)}{r_raw}:{m.group(2)}{r_raw}", formula_str)
 
                     # 2. Geser sel tunggal seperti RAW!O8 atau RAW!AD8
-                    s = re.sub(r'RAW!([A-Z]+)\d+', rf'RAW!\1{r_raw}', s)
+                    s = re.sub(r'RAW!([A-Z]+)\d+',
+                               lambda m: f"RAW!{m.group(1)}{r_raw}", s)
 
                     # 3. Geser referensi lokal di sheet FINAL (misal AD8 -> AD9)
-                    s = re.sub(rf'([A-Z]+){baris_awal_data}\b', rf'\g<1>{r_curr}', s)
+                    s = re.sub(rf'([A-Z]+){baris_awal_data}\b',
+                               lambda m: f"{m.group(1)}{r_curr}", s)
 
                     return norm_formula(s)
 
