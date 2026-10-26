@@ -1224,8 +1224,8 @@ def buat_excel(df_sumber, raw_bytes=None, nama_cabang_file='Semua Cabang'):
                     s = re.sub(r'RAW!([A-Z]+)\d+',
                                lambda m: f"RAW!{m.group(1)}{r_raw}", s)
 
-                    # 3. Geser referensi lokal di sheet FINAL (misal AD8 -> AD9)
-                    s = re.sub(rf'([A-Z]+){baris_awal_data}\b',
+                    # 3. Geser referensi lokal di sheet FINAL (hindari mengubah sel RAW! yang baru digeser)
+                    s = re.sub(rf'(?<![!A-Za-z0-9_\$])([A-Z]+){baris_awal_data}\b',
                                lambda m: f"{m.group(1)}{r_curr}", s)
 
                     return norm_formula(s)
@@ -1258,7 +1258,7 @@ def buat_excel(df_sumber, raw_bytes=None, nama_cabang_file='Semua Cabang'):
                         elif ref_val and isinstance(ref_val, str) and 'RAW!' in ref_val:
                             new_cell.value = transform_raw_formula(ref_val, r_raw, r_curr)
                         elif ref_val and isinstance(ref_val, str) and ref_val.startswith('='):
-                            val = re.sub(rf'([A-Z]+){baris_awal_data}\b', rf'\g<1>{r_curr}', ref_val)
+                            val = re.sub(rf'(?<![!A-Za-z0-9_\$])([A-Z]+){baris_awal_data}\b', rf'\g<1>{r_curr}', ref_val)
                             new_cell.value = norm_formula(val)
                         elif ref_val is not None:
                             new_cell.value = ref_val
