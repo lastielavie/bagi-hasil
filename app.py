@@ -92,6 +92,7 @@ NAMA_TARIF_TETAP_20 = [
     'RIDWAN KURNIAWAN',
 ]
 NAMA_TARIF_NORMAL_355 = ['EKO RISDIYANTORO JATIMULYA', 'IRVAN SYAHRONI']
+NAMA_TARIF_FLAT_10 = ['BOY RIKARDO']
 KOL_TARIF_KHUSUS = ['Nama Teknisi', 'Interface', 'Normal', 'Mati Total', 'Promo',
                     'Lainnya']
 
@@ -691,6 +692,12 @@ for kunci, tar in khusus.items():
         n_khusus += int(m.sum())
 tanpa_padanan = sorted(set(khusus) - set(peta_nama.values()))
 
+# Khusus teknisi flat 10% (BOY RIKARDO): langsung total omset * 10% (tidak ikut aturan lain)
+peta_flat_10 = cocokkan_teknisi(jasa_all['TEKNISI'].unique(), NAMA_TARIF_FLAT_10)
+for t_asli in peta_flat_10.keys():
+    m_flat = jasa_all['TEKNISI'] == t_asli
+    jasa_all.loc[m_flat, 'TARIF'] = 0.10
+
 jasa_all['BAGI_HASIL'] = jasa_all['TOTAL HARGA'] * jasa_all['TARIF']
 jasa_all['FLAT'] = jasa_all['TOTAL HARGA'] * (tarif_flat / 100.0)
 
@@ -860,6 +867,18 @@ def rekap_kualifikasi(df, keys):
     out['Selisih'] = out['BH'] - out['Flat']
     out['Efektif %'] = (out['BH'] / out['Omzet'].replace(0, pd.NA) * 100).round(1)
 
+    # Kosongkan nilai bagi hasil per kategori untuk teknisi flat 10% (BOY RIKARDO)
+    if 'TEKNISI' in keys:
+        for f in NAMA_TARIF_FLAT_10:
+            m_flat = out['TEKNISI'].apply(
+                lambda t: _nama_rapi(t) == f or _nama_rapi(t).startswith(f + ' ')
+            )
+            if m_flat.any():
+                for k in KATEGORI_ORDER:
+                    bh_col = f"Bagi Hasil {k}"
+                    if bh_col in out.columns:
+                        out.loc[m_flat, bh_col] = pd.NA
+
     kolom_omzet = [f"Omzet {k}" for k in KATEGORI_ORDER]
 
     urut = list(keys) + ['Baris'] + kolom_omzet + ['Omzet'] \
@@ -1020,6 +1039,10 @@ def _tulis_sheet(wb, df, nama_sheet, judul, kolom_gaji=False):
 
         tek_nama = df.iloc[i].get('Nama Teknisi', '')
         kunci_tek = peta_nama.get(tek_nama)
+        is_flat_10 = any(
+            _nama_rapi(tek_nama) == f or _nama_rapi(tek_nama).startswith(f + ' ')
+            for f in NAMA_TARIF_FLAT_10
+        )
         for k in KATEGORI_ORDER:
             bh_k = f"Bagi Hasil {k}"
             if bh_k not in df.columns:
@@ -1027,19 +1050,26 @@ def _tulis_sheet(wb, df, nama_sheet, judul, kolom_gaji=False):
             omzet_k = f"Omzet {k}"
             if omzet_k not in df.columns:
                 continue
-            tar_frac = peta_tarif.get(k, 0.3)
-            if kunci_tek and kunci_tek in khusus and k in khusus[kunci_tek]:
-                tar_frac = khusus[kunci_tek][k]
-            ws.cell(row=r, column=df.columns.get_loc(bh_k) + 1,
-                    value=f"={kol_letter(omzet_k)}{r}*{tar_frac}")
+            if is_flat_10:
+                ws.cell(row=r, column=df.columns.get_loc(bh_k) + 1, value=None)
+            else:
+                tar_frac = peta_tarif.get(k, 0.3)
+                if kunci_tek and kunci_tek in khusus and k in khusus[kunci_tek]:
+                    tar_frac = khusus[kunci_tek][k]
+                ws.cell(row=r, column=df.columns.get_loc(bh_k) + 1,
+                        value=f"={kol_letter(omzet_k)}{r}*{tar_frac}")
 
         if 'Omzet Jasa (Total)' in df.columns and 'Omzet Interface' in df.columns:
             ws.cell(row=r, column=df.columns.get_loc('Omzet Jasa (Total)') + 1,
                     value=f"=SUM({kol_letter('Omzet Interface')}{r}:{kol_letter('Omzet Lainnya')}{r})")
 
-        if 'Bagi Hasil (Aturan)' in df.columns and 'Bagi Hasil Interface' in df.columns:
-            ws.cell(row=r, column=df.columns.get_loc('Bagi Hasil (Aturan)') + 1,
-                    value=f"=SUM({kol_letter('Bagi Hasil Interface')}{r}:{kol_letter('Bagi Hasil Lainnya')}{r})")
+        if 'Bagi Hasil (Aturan)' in df.columns:
+            if is_flat_10 and 'Omzet Jasa (Total)' in df.columns:
+                ws.cell(row=r, column=df.columns.get_loc('Bagi Hasil (Aturan)') + 1,
+                        value=f"={kol_letter('Omzet Jasa (Total)')}{r}*10%")
+            elif 'Bagi Hasil Interface' in df.columns:
+                ws.cell(row=r, column=df.columns.get_loc('Bagi Hasil (Aturan)') + 1,
+                        value=f"=SUM({kol_letter('Bagi Hasil Interface')}{r}:{kol_letter('Bagi Hasil Lainnya')}{r})")
 
         if lbl_flat in df.columns and 'Omzet Jasa (Total)' in df.columns:
             ws.cell(row=r, column=df.columns.get_loc(lbl_flat) + 1,

@@ -56,6 +56,10 @@ Semua angka di atas **bisa diubah manual** lewat panel
 dan penentuan mana yang menang bila satu nama mengandung dua kata kunci
 (contoh: `JS PROMO LCD 250K - NORMAL`).
 
+Terdapat pula **aturan khusus teknisi**:
+- **BOY RIKARDO**: langsung flat 10% dari total omzet jasa (tidak mengikuti aturan kategori tarif lainnya).
+- Teknisi dengan tarif khusus lainnya (seperti kelompok tarif tetap 20% / 25% Matot dan kelompok Normal 35,5%).
+
 ## 5. Periode penggajian (cutoff 24 → 23)
 
 Gaji bulan M dihitung dari **24 bulan (M−2)** sampai **23 bulan (M−1)**.
