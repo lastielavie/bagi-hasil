@@ -88,11 +88,18 @@ NAMA_TARIF_TETAP_20 = [
     'HAMZAH MAULANA', 'DAVID SONDAKH', 'FATHUR ROHMAN SOBARNA', 'ALAI ARKAN',
     'ALFIN DAMARA', 'ADI FIRDAUS', 'M IQBAL PRADANA', 'IRSYAD PANCA GUNAWAN',
     'EGI SETYA RAMADHANI', 'ALVI SYAHLANI RAMADHAN', 'M NAUFAL', 'M HANIF FATIN',
+    'MUHAMMAD HANIF FATIN', 'MUHAMMAD IQBAL PRADANA',
     'SYAHDAN IBNU FAUZI', 'JUNARA', 'KARIM AGAKHAN', 'FARID HASBY ASH SHIDDIQ',
-    'RIDWAN KURNIAWAN',
+    'RIDWAN KURNIAWAN', 'SWARA NADEWA INDONESIAROSA', 'ARDIANSYAH',
+    'MUHAMAD DESTA ALFARIZY', 'ALFIYAN ARDIANSYAH', 'MUHAMMAD LUTHFI IDRIS',
+    'ARIFIN ANDREANSYAH', 'IBNU MAULANA', 'KARIM AGA KHAN', 'SALMAN AL FARISI',
+    'AHMAD HILAL AL-FAJRI HUSEIN', 'FARID HASBY ASH SIDDIQ',
+    'MUHAMMAD IBNU SIDDIQ',
 ]
 NAMA_TARIF_NORMAL_355 = ['EKO RISDIYANTORO JATIMULYA', 'IRVAN SYAHRONI']
 NAMA_TARIF_FLAT_10 = ['BOY RIKARDO']
+WARNA_TARIF_20 = 'FFE699'  # Gold, Accent 4, Lighter 60%
+WARNA_TARIF_355 = 'B4C6E7'  # Blue, Accent 1, Lighter 60%
 KOL_TARIF_KHUSUS = ['Nama Teknisi', 'Interface', 'Normal', 'Mati Total', 'Promo',
                     'Lainnya']
 
@@ -109,6 +116,16 @@ def tarif_khusus_awal():
 
 def _nama_rapi(s):
     return re.sub(r'\s+', ' ', str(s).strip().upper())
+
+
+def _tarif_20(nama):
+    n = _nama_rapi(nama)
+    return any(n == k or n.startswith(k + ' ') for k in NAMA_TARIF_TETAP_20)
+
+
+def _tarif_355(nama):
+    n = _nama_rapi(nama)
+    return any(n == k or n.startswith(k + ' ') for k in NAMA_TARIF_NORMAL_355)
 
 
 def peta_tarif_khusus(tabel):
@@ -1089,6 +1106,12 @@ def _tulis_sheet(wb, df, nama_sheet, judul, kolom_gaji=False):
             ws.cell(row=r, column=idx_baris).number_format = '#,##0'
         if idx_pct:
             ws.cell(row=r, column=idx_pct).number_format = '0.0'
+        warna = (WARNA_TARIF_20 if _tarif_20(tek_nama)
+                 else WARNA_TARIF_355 if _tarif_355(tek_nama) else None)
+        if warna:
+            for j in range(1, n_kol + 1):
+                ws.cell(row=r, column=j).fill = \
+                    PatternFill('solid', fgColor=warna)
         for j in range(1, n_kol + 1):
             ws.cell(row=r, column=j).border = Border(bottom=thin)
 
@@ -1164,6 +1187,7 @@ def buat_excel(df_sumber, raw_bytes=None, nama_cabang_file='Semua Cabang'):
     cabang_list = sorted(d['CABANG'].unique())
 
     n_data_raw = 0
+    dc_raw = None
     for idx, cab in enumerate(cabang_list):
         sub = d[d['CABANG'] == cab]
         if sub.empty:
@@ -1178,6 +1202,7 @@ def buat_excel(df_sumber, raw_bytes=None, nama_cabang_file='Semua Cabang'):
             s_name = 'RAW'
             terpakai.add('raw')
             n_data_raw = len(dc)
+            dc_raw = dc.copy()
         else:
             s_name = _sheet_name(cab, terpakai)
 
@@ -1312,6 +1337,22 @@ def buat_excel(df_sumber, raw_bytes=None, nama_cabang_file='Semua Cabang'):
                             flags=re.I
                         )
                         cell.value = norm_formula(val)
+
+                # 6. Warnai baris teknisi sesuai grup tarif khusus
+                if dc_raw is not None:
+                    kol_akhir = min(ws_f.max_column, column_index_from_string('AA'))
+                    for idx_s in range(n_data_raw):
+                        nama = dc_raw.iloc[idx_s]['Nama Teknisi']
+                        warna = (WARNA_TARIF_20 if _tarif_20(nama)
+                                 else WARNA_TARIF_355 if _tarif_355(nama)
+                                 else None)
+                        if warna is None:
+                            continue
+                        r_curr = baris_awal_data + idx_s
+                        for col_idx in range(2, kol_akhir + 1):
+                            cell = ws_f.cell(row=r_curr, column=col_idx)
+                            if not (cell.fill and cell.fill.fill_type == 'solid'):
+                                cell.fill = PatternFill('solid', fgColor=warna)
 
         except Exception as e:
             st.warning(f"Gagal menyalin/menyesuaikan sheet dari master file: {e}")
