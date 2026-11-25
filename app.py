@@ -405,14 +405,11 @@ def baca_mentah(items: tuple, kanonik: tuple, alias_items: tuple):
             pd.DataFrame(catatan), gagal)
 
 
-NAMA_KOSONG = {'', '-', '--', 'NAN', 'NONE', 'NULL', '<NA>', 'N/A', 'NA', '#N/A',
-               'N.A', 'N.A.', '#VALUE!', '#REF!', 'TIDAK ADA'}
-
-
-def _nama_teknisi_bersih(kolom: pd.Series) -> pd.Series:
+def _nama_teknisi_mentah(kolom: pd.Series) -> pd.Series:
+    """Nama teknisi apa adanya dari kolom FINAL: huruf tetap, 'N/A' tetap dibedakan."""
     s = (kolom.astype(str).str.replace(r'\s+', ' ', regex=True)
-         .str.strip().str.upper().fillna(''))
-    return s.where(~s.isin(NAMA_KOSONG), '')
+         .str.strip().replace({'nan': '', 'None': '', '<NA>': ''}))
+    return s
 
 
 def bersihkan(df: pd.DataFrame) -> pd.DataFrame:
@@ -429,12 +426,12 @@ def bersihkan(df: pd.DataFrame) -> pd.DataFrame:
                               'NaN': LABEL_TANPA_CABANG, 'None': LABEL_TANPA_CABANG})
                     .fillna(LABEL_TANPA_CABANG))
 
-    fin = _nama_teknisi_bersih(df['NAMA TEKNISI (FINAL)']) if 'NAMA TEKNISI (FINAL)' in df.columns \
-        else pd.Series('', index=df.index)
-    asli = _nama_teknisi_bersih(df['NAMA TEKNISI']) if 'NAMA TEKNISI' in df.columns \
-        else pd.Series('', index=df.index)
-
-    df['TEKNISI'] = fin.where(fin != '', asli)
+    if 'NAMA TEKNISI (FINAL)' in df.columns:
+        df['TEKNISI'] = _nama_teknisi_mentah(df['NAMA TEKNISI (FINAL)'])
+    elif 'NAMA TEKNISI' in df.columns:
+        df['TEKNISI'] = _nama_teknisi_mentah(df['NAMA TEKNISI'])
+    else:
+        df['TEKNISI'] = ''
     df.loc[df['TEKNISI'] == '', 'TEKNISI'] = 'TIDAK ADA TEKNISI'
 
     df = df[df['KATEGORI'] == 'JASA'].copy()
